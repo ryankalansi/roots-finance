@@ -73,7 +73,7 @@ export default function LoginPage() {
 
           <button
             disabled={isSubmitting}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center gap-2"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center gap-2 cursor-pointer"
           >
             {isSubmitting ? (
               <Loader2 className="animate-spin" />

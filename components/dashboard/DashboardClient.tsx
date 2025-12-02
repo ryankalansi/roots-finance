@@ -329,17 +329,17 @@ export default function DashboardClient({
         <nav className="p-4 space-y-2">
           <button
             onClick={() => setActiveTab("expenses")}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${
               activeTab === "expenses"
                 ? "bg-indigo-600 text-white"
-                : "hover:bg-slate-800 text-slate-400"
+                : "hover:bg-slate-800 text-slate-400 "
             }`}
           >
             <Wallet size={20} /> {isSidebarOpen && "Pengeluaran"}
           </button>
           <button
             onClick={() => setActiveTab("overtime")}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${
               activeTab === "overtime"
                 ? "bg-indigo-600 text-white"
                 : "hover:bg-slate-800 text-slate-400"
@@ -349,7 +349,7 @@ export default function DashboardClient({
           </button>
           <button
             onClick={() => setActiveTab("stats")}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${
               activeTab === "stats"
                 ? "bg-indigo-600 text-white"
                 : "hover:bg-slate-800 text-slate-400"
@@ -389,10 +389,12 @@ export default function DashboardClient({
             {/* TOMBOL EXCEL */}
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm cursor-pointer"
             >
               <FileSpreadsheet size={18} />
-              <span className="hidden md:inline">Download Laporan</span>
+              <span className="hidden md:inline cursor-pointer">
+                Download Laporan
+              </span>
             </button>
 
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
@@ -400,10 +402,10 @@ export default function DashboardClient({
             {/* TOMBOL LOGOUT */}
             <button
               onClick={() => logout()}
-              className="flex items-center gap-2 text-slate-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+              className="flex items-center gap-2 text-slate-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors text-sm font-medium cursor-pointer"
             >
               <LogOut size={18} />
-              <span className="hidden md:inline">Keluar</span>
+              <span className="hidden md:inline ">Keluar</span>
             </button>
           </div>
         </header>
@@ -417,7 +419,7 @@ export default function DashboardClient({
                 <div className="bg-white p-1 rounded-full border border-slate-200 shadow-sm inline-flex">
                   <button
                     onClick={() => setStatsSlide(0)}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
                       statsSlide === 0
                         ? "bg-indigo-600 text-white shadow"
                         : "text-slate-500 hover:bg-slate-50"
@@ -427,7 +429,7 @@ export default function DashboardClient({
                   </button>
                   <button
                     onClick={() => setStatsSlide(1)}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
                       statsSlide === 1
                         ? "bg-indigo-600 text-white shadow"
                         : "text-slate-500 hover:bg-slate-50"
@@ -437,7 +439,7 @@ export default function DashboardClient({
                   </button>
                   <button
                     onClick={() => setStatsSlide(2)}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
                       statsSlide === 2
                         ? "bg-indigo-600 text-white shadow"
                         : "text-slate-500 hover:bg-slate-50"
@@ -636,7 +638,7 @@ export default function DashboardClient({
                     </h3>
                     <button
                       onClick={openBudgetModal}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
                     >
                       <Edit3 size={16} className="text-slate-600" />
                     </button>
@@ -670,7 +672,7 @@ export default function DashboardClient({
 
                     <button
                       onClick={() => setIsModalOpen(true)}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap"
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap cursor-pointer"
                     >
                       <Plus size={16} /> Tambah Data
                     </button>
@@ -802,7 +804,7 @@ export default function DashboardClient({
                               <td className="px-6 py-4 text-center">
                                 <button
                                   onClick={() => handleDelete(item.id)}
-                                  className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg"
+                                  className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg cursor-pointer"
                                 >
                                   <Trash2 size={16} />
                                 </button>
@@ -872,7 +874,7 @@ export default function DashboardClient({
               </div>
               <button
                 disabled={isSubmitting}
-                className="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2"
+                className="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" size={20} />
@@ -1033,7 +1035,7 @@ export default function DashboardClient({
 
               <button
                 disabled={isSubmitting}
-                className="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2"
+                className="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" size={20} />
