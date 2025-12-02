@@ -14,6 +14,7 @@ import {
   Clock,
   BarChart3,
   FileSpreadsheet,
+  LogOut,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 import {
@@ -24,6 +25,7 @@ import {
   deleteOvertime,
   updateOvertimeStatus,
   updateBudget,
+  logout,
 } from "@/app/actions";
 
 // IMPORT RECHARTS
@@ -105,7 +107,6 @@ export default function DashboardClient({
   const [budgetInput, setBudgetInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // STATE BARU: PILIH BULAN (ARCHIVE & CURRENT)
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
@@ -116,7 +117,7 @@ export default function DashboardClient({
     return () => clearTimeout(timer);
   }, []);
 
-  // --- 1. FILTER UTAMA BERDASARKAN BULAN ---
+  // --- FILTERING & DATA PROCESSING (Sama seperti sebelumnya) ---
   const currentMonthExpenses = useMemo(() => {
     return expenses.filter((item) => item.date.startsWith(selectedMonth));
   }, [expenses, selectedMonth]);
@@ -125,7 +126,6 @@ export default function DashboardClient({
     return overtimes.filter((item) => item.date.startsWith(selectedMonth));
   }, [overtimes, selectedMonth]);
 
-  // --- 2. FILTER PENCARIAN ---
   const filteredExpenses = currentMonthExpenses.filter(
     (item) =>
       item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,7 +136,6 @@ export default function DashboardClient({
     item.employee_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // --- 3. DATA PROCESSING CHART ---
   const chartData = useMemo(() => {
     const daysInMonth = new Date(
       parseInt(selectedMonth.split("-")[0]),
@@ -168,7 +167,6 @@ export default function DashboardClient({
     return data;
   }, [currentMonthExpenses, currentMonthOvertimes, selectedMonth]);
 
-  // --- 4. KALKULASI STATISTIK ---
   const totalExpenseAmount = currentMonthExpenses
     .filter((item) => item.status !== "Rejected")
     .reduce((acc, curr) => acc + curr.amount, 0);
@@ -239,11 +237,8 @@ export default function DashboardClient({
     setIsBudgetModalOpen(true);
   };
 
-  // --- FITUR DOWNLOAD EXCEL ---
   const handleExportExcel = () => {
     const wb = XLSX.utils.book_new();
-
-    // 1. SUMMARY SHEET
     const summaryRows = [
       ["LAPORAN KEUANGAN BULANAN", ""],
       ["Periode", selectedMonth],
@@ -257,11 +252,9 @@ export default function DashboardClient({
       ["", ""],
       ["Tanggal Download", new Date().toLocaleString()],
     ];
-
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
     wsSummary["!cols"] = [{ wch: 35 }, { wch: 25 }];
 
-    // 2. EXPENSE SHEET
     const expenseData = currentMonthExpenses.map((item) => ({
       "Tanggal": item.date,
       "Deskripsi Item": item.description,
@@ -280,7 +273,6 @@ export default function DashboardClient({
       { wch: 30 },
     ];
 
-    // 3. OVERTIME SHEET
     const overtimeData = currentMonthOvertimes.map((item) => ({
       "Tanggal": item.date,
       "Nama Karyawan": item.employee_name,
@@ -379,7 +371,7 @@ export default function DashboardClient({
               <Menu size={20} />
             </button>
 
-            {/* AREA JUDUL & FILTER PERIODE (ARCHIVE) */}
+            {/* AREA JUDUL & FILTER PERIODE */}
             <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-lg">
               <div className="px-3 text-sm font-bold text-slate-600 hidden md:block">
                 Periode:
@@ -394,7 +386,7 @@ export default function DashboardClient({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* TOMBOL EXPORT EXCEL (ARCHIVED) */}
+            {/* TOMBOL EXCEL */}
             <button
               onClick={handleExportExcel}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
@@ -402,8 +394,17 @@ export default function DashboardClient({
               <FileSpreadsheet size={18} />
               <span className="hidden md:inline">Download Laporan</span>
             </button>
+
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
-            <div className="text-sm font-semibold text-slate-500">Admin</div>
+
+            {/* TOMBOL LOGOUT */}
+            <button
+              onClick={() => logout()}
+              className="flex items-center gap-2 text-slate-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+            >
+              <LogOut size={18} />
+              <span className="hidden md:inline">Keluar</span>
+            </button>
           </div>
         </header>
 

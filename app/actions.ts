@@ -3,7 +3,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
+// --- SUPABASE CLIENT HELPER ---
 async function createClient() {
   const cookieStore = await cookies();
 
@@ -34,7 +36,36 @@ async function createClient() {
   );
 }
 
-// --- EXPENSES ---
+// --- AUTH ACTIONS ---
+
+export async function login(formData: FormData) {
+  const supabase = await createClient();
+
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    return { success: false, message: error.message };
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
+export async function logout() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/login");
+}
+
+// --- EXPENSES ACTIONS ---
+
 export async function addExpense(formData: FormData) {
   const supabase = await createClient();
 
@@ -48,6 +79,7 @@ export async function addExpense(formData: FormData) {
   };
 
   const { error } = await supabase.from("expenses").insert(rawData);
+
   if (error) return { success: false, message: error.message };
 
   revalidatePath("/");
@@ -73,15 +105,16 @@ export async function updateExpenseStatus(id: string, newStatus: string) {
   return { success: true };
 }
 
-// --- OVERTIMES (BARU) ---
+// --- OVERTIME ACTIONS ---
+
 export async function addOvertime(formData: FormData) {
   const supabase = await createClient();
 
   const rawData = {
     date: formData.get("date"),
     employee_name: formData.get("employee_name"),
-    days: Number(formData.get("days")), // Jumlah Hari
-    rate: Number(formData.get("rate")?.toString().replace(/\D/g, "")), // Nominal per hari
+    days: Number(formData.get("days")),
+    rate: Number(formData.get("rate")?.toString().replace(/\D/g, "")),
     status: formData.get("status") || "Default",
     note: formData.get("note"),
   };
