@@ -1,36 +1,77 @@
-'use client'
+"use client";
 
-import React, { useState, useEffect, useMemo } from 'react'
-import { 
-  LayoutDashboard, Wallet, Plus, Trash2, 
-  Menu, X, Loader2, Search, Edit3, Clock, 
-  BarChart3, FileSpreadsheet, Hourglass, LogOut // Import LogOut
-} from 'lucide-react'
-import { formatRupiah } from '@/lib/utils'
-import { 
-  addExpense, deleteExpense, updateExpenseStatus,
-  addOvertime, deleteOvertime, updateOvertimeStatus,
-  updateBudget, logout // Import fungsi logout
-} from '@/app/actions'
+import React, { useState, useEffect, useMemo } from "react";
+// FIX 1: Hapus 'LayoutDashboard' dari import karena tidak dipakai
+import {
+  Wallet,
+  Plus,
+  Trash2,
+  Menu,
+  X,
+  Loader2,
+  Search,
+  Edit3,
+  Clock,
+  BarChart3,
+  FileSpreadsheet,
+  Hourglass,
+  LogOut,
+} from "lucide-react";
+import { formatRupiah } from "@/lib/utils";
+import {
+  addExpense,
+  deleteExpense,
+  updateExpenseStatus,
+  addOvertime,
+  deleteOvertime,
+  updateOvertimeStatus,
+  updateBudget,
+  logout,
+} from "@/app/actions";
 
 // IMPORT RECHARTS
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  AreaChart, Area, ComposedChart, Line 
-} from 'recharts'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  ComposedChart,
+  Line,
+} from "recharts";
 
 // IMPORT XLSX
-import * as XLSX from 'xlsx'
+import * as XLSX from "xlsx";
+
+// FIX 2: Import Image dari Next.js untuk ganti tag <img>
+import Image from "next/image";
 
 type Expense = {
-  id: string; date: string; description: string; requester: string; amount: number; status: string; note: string;
-}
+  id: string;
+  date: string;
+  description: string;
+  requester: string;
+  amount: number;
+  status: string;
+  note: string;
+};
 
 type Overtime = {
-  id: string; date: string; employee_name: string; days: number; rate: number; status: string; note: string;
-}
+  id: string;
+  date: string;
+  employee_name: string;
+  days: number;
+  rate: number;
+  status: string;
+  note: string;
+};
 
-// --- FIX: DEFINISI TYPE UNTUK TOOLTIP ---
+// --- KOMPONEN TOOLTIP ---
 interface CustomTooltipProps {
   active?: boolean;
   payload?: {
@@ -48,259 +89,320 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         <p className="text-sm font-bold text-slate-700 mb-2">{label}</p>
         {payload.map((entry, index) => (
           <p key={index} className="text-xs" style={{ color: entry.color }}>
-            {entry.name}: <span className="font-bold">{formatRupiah(entry.value)}</span>
+            {entry.name}:{" "}
+            <span className="font-bold">{formatRupiah(entry.value)}</span>
           </p>
         ))}
       </div>
-    )
+    );
   }
-  return null
-}
+  return null;
+};
 
-export default function DashboardClient({ 
-  expenses, 
+export default function DashboardClient({
+  expenses,
   overtimes,
-  initialBudget 
-}: { 
-  expenses: Expense[], 
-  overtimes: Overtime[],
-  initialBudget: number 
+  initialBudget,
+}: {
+  expenses: Expense[];
+  overtimes: Overtime[];
+  initialBudget: number;
 }) {
-  const [activeTab, setActiveTab] = useState<'expenses' | 'overtime' | 'stats'>('expenses')
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [statsSlide, setStatsSlide] = useState(0)
-  const [amountInput, setAmountInput] = useState('') 
-  const [budgetInput, setBudgetInput] = useState('') 
-  const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState<"expenses" | "overtime" | "stats">(
+    "expenses"
+  );
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statsSlide, setStatsSlide] = useState(0);
+  const [amountInput, setAmountInput] = useState("");
+  const [budgetInput, setBudgetInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // STATE BARU: PILIH BULAN (ARCHIVE & CURRENT)
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
 
-  const [isMounted, setIsMounted] = useState(false)
+  const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setIsMounted(true), 0)
-    return () => clearTimeout(timer)
-  }, [])
+    const timer = setTimeout(() => setIsMounted(true), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // --- 1. FILTER UTAMA BERDASARKAN BULAN (ARCHIVE LOGIC) ---
+  // --- FILTERING & DATA ---
   const currentMonthExpenses = useMemo(() => {
-    return expenses.filter(item => item.date.startsWith(selectedMonth))
-  }, [expenses, selectedMonth])
+    return expenses.filter((item) => item.date.startsWith(selectedMonth));
+  }, [expenses, selectedMonth]);
 
   const currentMonthOvertimes = useMemo(() => {
-    return overtimes.filter(item => item.date.startsWith(selectedMonth))
-  }, [overtimes, selectedMonth])
+    return overtimes.filter((item) => item.date.startsWith(selectedMonth));
+  }, [overtimes, selectedMonth]);
 
-  // --- 2. FILTER PENCARIAN (SEARCH) ---
-  const filteredExpenses = currentMonthExpenses.filter(item => 
-    item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.requester.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredExpenses = currentMonthExpenses.filter(
+    (item) =>
+      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.requester.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const filteredOvertimes = currentMonthOvertimes.filter(item => 
+  const filteredOvertimes = currentMonthOvertimes.filter((item) =>
     item.employee_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
 
-  // --- 3. DATA PROCESSING CHART (Berdasarkan Bulan Terpilih) ---
   const chartData = useMemo(() => {
-    const daysInMonth = new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]), 0).getDate()
+    const daysInMonth = new Date(
+      parseInt(selectedMonth.split("-")[0]),
+      parseInt(selectedMonth.split("-")[1]),
+      0
+    ).getDate();
     const data = Array.from({ length: daysInMonth }, (_, i) => ({
       name: `${i + 1}`,
       Pengeluaran: 0,
       Lembur: 0,
-      Total: 0
-    }))
+      Total: 0,
+    }));
 
-    currentMonthExpenses.forEach(item => {
-      if (item.status !== 'Rejected') {
-        const day = new Date(item.date).getDate() - 1
-        if (data[day]) data[day].Pengeluaran += item.amount
+    currentMonthExpenses.forEach((item) => {
+      if (item.status !== "Rejected") {
+        const day = new Date(item.date).getDate() - 1;
+        if (data[day]) data[day].Pengeluaran += item.amount;
       }
-    })
+    });
 
-    currentMonthOvertimes.forEach(item => {
-      if (item.status !== 'Rejected') {
-        const day = new Date(item.date).getDate() - 1
-        if (data[day]) data[day].Lembur += (item.days * item.rate)
+    currentMonthOvertimes.forEach((item) => {
+      if (item.status !== "Rejected") {
+        const day = new Date(item.date).getDate() - 1;
+        if (data[day]) data[day].Lembur += item.days * item.rate;
       }
-    })
+    });
 
-    data.forEach(d => d.Total = d.Pengeluaran + d.Lembur)
-    return data
-  }, [currentMonthExpenses, currentMonthOvertimes, selectedMonth])
+    data.forEach((d) => (d.Total = d.Pengeluaran + d.Lembur));
+    return data;
+  }, [currentMonthExpenses, currentMonthOvertimes, selectedMonth]);
 
-  // --- 4. KALKULASI STATISTIK (REALTIME SESUAI BULAN) ---
+  // --- KALKULASI STATISTIK ---
   const totalExpenseAmount = currentMonthExpenses
-    .filter(item => item.status !== 'Rejected')
-    .reduce((acc, curr) => acc + curr.amount, 0)
+    .filter((item) => item.status !== "Rejected")
+    .reduce((acc, curr) => acc + curr.amount, 0);
 
   const totalOvertimeAmount = currentMonthOvertimes
-    .filter(item => item.status !== 'Rejected')
-    .reduce((acc, curr) => acc + (curr.days * curr.rate), 0)
+    .filter((item) => item.status !== "Rejected")
+    .reduce((acc, curr) => acc + curr.days * curr.rate, 0);
 
-  const grandTotalUsed = totalExpenseAmount + totalOvertimeAmount
-  const sisaBudget = initialBudget - grandTotalUsed 
+  const grandTotalUsed = totalExpenseAmount + totalOvertimeAmount;
+  const sisaBudget = initialBudget - grandTotalUsed;
 
-  const currentMainStat = activeTab === 'expenses' ? totalExpenseAmount : totalOvertimeAmount
-  const currentPendingCount = activeTab === 'expenses'
-    ? filteredExpenses.filter(i => i.status === 'Pending').length
-    : filteredOvertimes.filter(i => i.status === 'Pending').length
+  const currentMainStat =
+    activeTab === "expenses" ? totalExpenseAmount : totalOvertimeAmount;
+  const currentPendingCount =
+    activeTab === "expenses"
+      ? filteredExpenses.filter((i) => i.status === "Pending").length
+      : filteredOvertimes.filter((i) => i.status === "Pending").length;
 
   // --- HANDLERS ---
-  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
-    const rawValue = e.target.value.replace(/\D/g, '')
-    setter(rawValue ? new Intl.NumberFormat('id-ID').format(Number(rawValue)) : '')
-  }
+  const handleNumberChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    const rawValue = e.target.value.replace(/\D/g, "");
+    setter(
+      rawValue ? new Intl.NumberFormat("id-ID").format(Number(rawValue)) : ""
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    const formData = new FormData(e.currentTarget)
-    
-    if (activeTab === 'expenses') await addExpense(formData)
-    else await addOvertime(formData)
-    
-    setIsSubmitting(false)
-    setIsModalOpen(false)
-    setAmountInput('') 
-  }
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+
+    if (activeTab === "expenses") await addExpense(formData);
+    else await addOvertime(formData);
+
+    setIsSubmitting(false);
+    setIsModalOpen(false);
+    setAmountInput("");
+  };
 
   const handleUpdateBudget = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    const formData = new FormData(e.currentTarget)
-    const cleanAmount = Number(formData.get('budget')?.toString().replace(/\D/g, ''))
-    await updateBudget(cleanAmount)
-    setIsSubmitting(false)
-    setIsBudgetModalOpen(false)
-  }
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    const cleanAmount = Number(
+      formData.get("budget")?.toString().replace(/\D/g, "")
+    );
+    await updateBudget(cleanAmount);
+    setIsSubmitting(false);
+    setIsBudgetModalOpen(false);
+  };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus data ini?')) return
-    if (activeTab === 'expenses') await deleteExpense(id)
-    else await deleteOvertime(id)
-  }
+    if (!confirm("Hapus data ini?")) return;
+    if (activeTab === "expenses") await deleteExpense(id);
+    else await deleteOvertime(id);
+  };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
-    if (activeTab === 'expenses') await updateExpenseStatus(id, newStatus)
-    else await updateOvertimeStatus(id, newStatus)
-  }
+    if (activeTab === "expenses") await updateExpenseStatus(id, newStatus);
+    else await updateOvertimeStatus(id, newStatus);
+  };
 
   const openBudgetModal = () => {
-    setBudgetInput(new Intl.NumberFormat('id-ID').format(initialBudget))
-    setIsBudgetModalOpen(true)
-  }
+    setBudgetInput(new Intl.NumberFormat("id-ID").format(initialBudget));
+    setIsBudgetModalOpen(true);
+  };
 
-  // --- FITUR DOWNLOAD EXCEL ---
   const handleExportExcel = () => {
-    const wb = XLSX.utils.book_new()
-    
-    // 1. SUMMARY SHEET
+    const wb = XLSX.utils.book_new();
     const summaryRows = [
       ["LAPORAN KEUANGAN BULANAN", ""],
       ["Periode", selectedMonth],
-      ["", ""], 
-      ["KETERANGAN", "NOMINAL (Rp)"], 
+      ["", ""],
+      ["KETERANGAN", "NOMINAL (Rp)"],
       ["Total Alokasi Budget", initialBudget],
       ["Total Pengeluaran Operasional", totalExpenseAmount],
       ["Total Biaya Lembur", totalOvertimeAmount],
       ["Total Terpakai (All)", grandTotalUsed],
       ["Sisa Budget Akhir", sisaBudget],
       ["", ""],
-      ["Tanggal Download", new Date().toLocaleString()]
-    ]
+      ["Tanggal Download", new Date().toLocaleString()],
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+    wsSummary["!cols"] = [{ wch: 35 }, { wch: 25 }];
 
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows)
-    wsSummary['!cols'] = [{wch: 35}, {wch: 25}]
-
-    // 2. EXPENSE SHEET
-    const expenseData = currentMonthExpenses.map(item => ({
+    const expenseData = currentMonthExpenses.map((item) => ({
       "Tanggal": item.date,
       "Deskripsi Item": item.description,
       "Pemohon": item.requester,
       "Nominal (Rp)": item.amount,
       "Status": item.status,
-      "Catatan": item.note || '-'
-    }))
-    const wsExpense = XLSX.utils.json_to_sheet(expenseData)
-    wsExpense['!cols'] = [{wch: 15}, {wch: 30}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 30}]
+      "Catatan": item.note || "-",
+    }));
+    const wsExpense = XLSX.utils.json_to_sheet(expenseData);
+    wsExpense["!cols"] = [
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 30 },
+    ];
 
-    // 3. OVERTIME SHEET
-    const overtimeData = currentMonthOvertimes.map(item => ({
+    const overtimeData = currentMonthOvertimes.map((item) => ({
       "Tanggal": item.date,
       "Nama Karyawan": item.employee_name,
       "Jumlah Hari": item.days,
       "Rate Harian (Rp)": item.rate,
       "Total (Rp)": item.days * item.rate,
       "Status": item.status,
-      "Catatan": item.note || '-'
-    }))
-    const wsOvertime = XLSX.utils.json_to_sheet(overtimeData)
-    wsOvertime['!cols'] = [{wch: 15}, {wch: 30}, {wch: 10}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 30}]
+      "Catatan": item.note || "-",
+    }));
+    const wsOvertime = XLSX.utils.json_to_sheet(overtimeData);
+    wsOvertime["!cols"] = [
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 30 },
+    ];
 
-    XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan")
-    XLSX.utils.book_append_sheet(wb, wsExpense, "Pengeluaran")
-    XLSX.utils.book_append_sheet(wb, wsOvertime, "Lembur")
-
-    XLSX.writeFile(wb, `Laporan_Keuangan_Roots_${selectedMonth}.xlsx`)
-  }
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan");
+    XLSX.utils.book_append_sheet(wb, wsExpense, "Pengeluaran");
+    XLSX.utils.book_append_sheet(wb, wsOvertime, "Lembur");
+    XLSX.writeFile(wb, `Laporan_Keuangan_Roots_${selectedMonth}.xlsx`);
+  };
 
   const getStatusColor = (status: string) => {
-    if (!status) return 'bg-slate-100 text-slate-600 border-slate-200' 
-    const normalized = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
+    if (!status) return "bg-slate-100 text-slate-600 border-slate-200";
+    const normalized =
+      status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
     const styles: Record<string, string> = {
-      Approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-      Pending: 'bg-slate-800 text-white border-slate-900', 
-      Rejected: 'bg-red-100 text-red-700 border-red-200',
-      Default: 'bg-slate-100 text-slate-600 border-slate-200',
-    }
-    return styles[normalized] || styles.Default
-  }
+      Approved: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      Pending: "bg-slate-800 text-white border-slate-900",
+      Rejected: "bg-red-100 text-red-700 border-red-200",
+      Default: "bg-slate-100 text-slate-600 border-slate-200",
+    };
+    return styles[normalized] || styles.Default;
+  };
 
-  if (!isMounted) return null
+  if (!isMounted) return null;
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800">
-      
       {/* SIDEBAR */}
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-slate-200 transition-all duration-300 flex flex-col shadow-sm`}>
-        {/* Logo Area */}
+      <aside
+        className={`${
+          isSidebarOpen ? "w-64" : "w-20"
+        } bg-white border-r border-slate-200 transition-all duration-300 flex flex-col shadow-sm`}
+      >
         <div className="h-20 flex items-center justify-center border-b border-slate-100 p-4">
           {isSidebarOpen ? (
-             <img 
-               src="/logo.png" 
-               alt="Roots Lab" 
-               className="h-full w-auto object-contain"
-             />
+            // FIX 2: Gunakan komponen Image dari Next.js
+            <Image
+              src="/logo.png"
+              alt="Roots Lab"
+              width={120}
+              height={40}
+              className="h-full w-auto object-contain"
+              priority
+            />
           ) : (
-             <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center font-bold text-white text-xl shadow-md">R</div>
+            <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center font-bold text-white text-xl shadow-md">
+              R
+            </div>
           )}
         </div>
 
         <nav className="p-4 space-y-2 flex-1">
-          <button onClick={() => setActiveTab('expenses')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium cursor-pointer ${activeTab === 'expenses' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+          <button
+            onClick={() => setActiveTab("expenses")}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium cursor-pointer ${
+              activeTab === "expenses"
+                ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+          >
             <Wallet size={20} /> {isSidebarOpen && "Pengeluaran"}
           </button>
-          <button onClick={() => setActiveTab('overtime')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium cursor-pointer ${activeTab === 'overtime' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+          <button
+            onClick={() => setActiveTab("overtime")}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium cursor-pointer ${
+              activeTab === "overtime"
+                ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+          >
             <Clock size={20} /> {isSidebarOpen && "Lembur"}
           </button>
-          <button onClick={() => setActiveTab('stats')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium cursor-pointer ${activeTab === 'stats' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+          <button
+            onClick={() => setActiveTab("stats")}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium cursor-pointer ${
+              activeTab === "stats"
+                ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+          >
             <BarChart3 size={20} /> {isSidebarOpen && "Laporan"}
           </button>
         </nav>
 
         {/* Footer Sidebar */}
         <div className="p-4 border-t border-slate-100">
-          <div className={`flex items-center gap-3 ${!isSidebarOpen && 'justify-center'}`}>
+          <div
+            className={`flex items-center gap-3 ${
+              !isSidebarOpen && "justify-center"
+            }`}
+          >
             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
               A
             </div>
             {isSidebarOpen && (
               <div className="overflow-hidden">
-                <p className="text-sm font-bold text-slate-700 truncate">Admin Kantor</p>
+                <p className="text-sm font-bold text-slate-700 truncate">
+                  Admin Kantor
+                </p>
                 <p className="text-xs text-slate-400 truncate">Keuangan</p>
               </div>
             )}
@@ -312,16 +414,20 @@ export default function DashboardClient({
       <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
         <header className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors cursor-pointer">
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors cursor-pointer"
+            >
               <Menu size={22} />
             </button>
-            
-            {/* Filter Periode */}
-            <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
-              <div className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:block">Periode</div>
-              <input 
-                type="month" 
-                value={selectedMonth} 
+
+            <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <div className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:block">
+                Periode
+              </div>
+              <input
+                type="month"
+                value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="bg-white border-none text-slate-700 text-sm rounded-md focus:ring-0 block p-1.5 cursor-pointer hover:text-slate-900 font-medium shadow-sm"
               />
@@ -329,8 +435,7 @@ export default function DashboardClient({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Tombol Download */}
-            <button 
+            <button
               onClick={handleExportExcel}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg hover:shadow-emerald-200 cursor-pointer"
             >
@@ -340,8 +445,7 @@ export default function DashboardClient({
 
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
 
-            {/* TOMBOL KELUAR (RESTORED) */}
-            <button 
+            <button
               onClick={() => logout()}
               className="flex items-center gap-2 text-slate-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors text-sm font-medium cursor-pointer"
             >
@@ -352,19 +456,38 @@ export default function DashboardClient({
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
-          
-          {/* KONTEN TAB STATISTIK */}
-          {activeTab === 'stats' ? (
+          {activeTab === "stats" ? (
             <div className="space-y-6 max-w-6xl mx-auto">
               <div className="flex justify-center mb-8">
                 <div className="bg-white p-1.5 rounded-full border border-slate-200 shadow-sm inline-flex">
-                  <button onClick={() => setStatsSlide(0)} className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${statsSlide === 0 ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                  <button
+                    onClick={() => setStatsSlide(0)}
+                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
+                      statsSlide === 0
+                        ? "bg-slate-900 text-white shadow-md"
+                        : "text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
                     Pengeluaran Harian
                   </button>
-                  <button onClick={() => setStatsSlide(1)} className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${statsSlide === 1 ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                  <button
+                    onClick={() => setStatsSlide(1)}
+                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
+                      statsSlide === 1
+                        ? "bg-slate-900 text-white shadow-md"
+                        : "text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
                     Lembur Harian
                   </button>
-                  <button onClick={() => setStatsSlide(2)} className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${statsSlide === 2 ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                  <button
+                    onClick={() => setStatsSlide(2)}
+                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
+                      statsSlide === 2
+                        ? "bg-slate-900 text-white shadow-md"
+                        : "text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
                     Gabungan
                   </button>
                 </div>
@@ -373,17 +496,42 @@ export default function DashboardClient({
               {statsSlide === 0 && (
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in zoom-in duration-300">
                   <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-                    <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600"><Wallet size={20}/></div>
+                    <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                      <Wallet size={20} />
+                    </div>
                     Grafik Pengeluaran Harian ({selectedMonth})
                   </h3>
                   <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(value) => `${value / 1000}k`} />
-                        <Tooltip content={<CustomTooltip />} cursor={{fill: '#f8fafc'}} />
-                        <Bar dataKey="Pengeluaran" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40} />
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          vertical={false}
+                          stroke="#f1f5f9"
+                        />
+                        <XAxis
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                          dy={10}
+                        />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                          tickFormatter={(value) => `${value / 1000}k`}
+                        />
+                        <Tooltip
+                          content={<CustomTooltip />}
+                          cursor={{ fill: "#f8fafc" }}
+                        />
+                        <Bar
+                          dataKey="Pengeluaran"
+                          fill="#6366f1"
+                          radius={[4, 4, 0, 0]}
+                          barSize={40}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -393,17 +541,40 @@ export default function DashboardClient({
               {statsSlide === 1 && (
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in zoom-in duration-300">
                   <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-                    <div className="p-2 bg-orange-100 rounded-lg text-orange-600"><Clock size={20}/></div>
+                    <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                      <Clock size={20} />
+                    </div>
                     Grafik Lembur Harian ({selectedMonth})
                   </h3>
                   <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(value) => `${value / 1000}k`} />
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          vertical={false}
+                          stroke="#f1f5f9"
+                        />
+                        <XAxis
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                          dy={10}
+                        />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                          tickFormatter={(value) => `${value / 1000}k`}
+                        />
                         <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="Lembur" stroke="#f97316" fill="#ffedd5" strokeWidth={3} />
+                        <Area
+                          type="monotone"
+                          dataKey="Lembur"
+                          stroke="#f97316"
+                          fill="#ffedd5"
+                          strokeWidth={3}
+                        />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -413,113 +584,201 @@ export default function DashboardClient({
               {statsSlide === 2 && (
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in zoom-in duration-300">
                   <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600"><BarChart3 size={20}/></div>
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                      <BarChart3 size={20} />
+                    </div>
                     Analisis Gabungan ({selectedMonth})
                   </h3>
                   <div className="h-[400px] w-full mb-8">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(value) => `${value / 1000}k`} />
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          vertical={false}
+                          stroke="#f1f5f9"
+                        />
+                        <XAxis
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                          dy={10}
+                        />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                          tickFormatter={(value) => `${value / 1000}k`}
+                        />
                         <Tooltip content={<CustomTooltip />} />
                         <Legend iconType="circle" />
-                        <Bar dataKey="Pengeluaran" fill="#6366f1" stackId="a" radius={[0, 0, 4, 4]} barSize={40} />
-                        <Bar dataKey="Lembur" fill="#f97316" stackId="a" radius={[4, 4, 0, 0]} barSize={40} />
-                        <Line type="monotone" dataKey="Total" stroke="#10b981" strokeWidth={3} dot={{r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff'}} />
+                        <Bar
+                          dataKey="Pengeluaran"
+                          fill="#6366f1"
+                          stackId="a"
+                          radius={[0, 0, 4, 4]}
+                          barSize={40}
+                        />
+                        <Bar
+                          dataKey="Lembur"
+                          fill="#f97316"
+                          stackId="a"
+                          radius={[4, 4, 0, 0]}
+                          barSize={40}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Total"
+                          stroke="#10b981"
+                          strokeWidth={3}
+                          dot={{
+                            r: 4,
+                            fill: "#10b981",
+                            strokeWidth: 2,
+                            stroke: "#fff",
+                          }}
+                        />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Total Terpakai</p>
-                      <p className="text-2xl font-bold text-slate-800">{formatRupiah(grandTotalUsed)}</p>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">
+                        Total Terpakai
+                      </p>
+                      <p className="text-2xl font-bold text-slate-800">
+                        {formatRupiah(grandTotalUsed)}
+                      </p>
                     </div>
                     <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Sisa Budget Akhir</p>
-                      <p className={`text-2xl font-bold ${sisaBudget < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatRupiah(sisaBudget)}</p>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">
+                        Sisa Budget Akhir
+                      </p>
+                      <p
+                        className={`text-2xl font-bold ${
+                          sisaBudget < 0 ? "text-red-600" : "text-emerald-600"
+                        }`}
+                      >
+                        {formatRupiah(sisaBudget)}
+                      </p>
                     </div>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            // KONTEN TAB PENGELUARAN & LEMBUR
             <div className="max-w-7xl mx-auto space-y-6">
-              {/* STATS CARDS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                      {activeTab === 'expenses' ? <Wallet size={20}/> : <Clock size={20}/>}
+                      {activeTab === "expenses" ? (
+                        <Wallet size={20} />
+                      ) : (
+                        <Clock size={20} />
+                      )}
                     </div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      {activeTab === 'expenses' ? 'Pengeluaran' : 'Lembur'}
+                      {activeTab === "expenses" ? "Pengeluaran" : "Lembur"}
                     </p>
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-800">{formatRupiah(currentMainStat)}</h3>
+                  <h3 className="text-2xl font-bold text-slate-800">
+                    {formatRupiah(currentMainStat)}
+                  </h3>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                   <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-slate-800 rounded-lg text-white">
-                      <Hourglass size={20}/> 
+                      <Hourglass size={20} />
                     </div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Review</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Pending Review
+                    </p>
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-800">{currentPendingCount} <span className="text-sm font-normal text-slate-400">Item</span></h3>
+                  <h3 className="text-2xl font-bold text-slate-800">
+                    {currentPendingCount}{" "}
+                    <span className="text-sm font-normal text-slate-400">
+                      Item
+                    </span>
+                  </h3>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                   <div className="flex items-center gap-3 mb-3">
-                    <div className={`p-2 rounded-lg ${sisaBudget < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                      <BarChart3 size={20}/>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div
+                      className={`p-2 rounded-lg ${
+                        sisaBudget < 0
+                          ? "bg-red-50 text-red-600"
+                          : "bg-emerald-50 text-emerald-600"
+                      }`}
+                    >
+                      <BarChart3 size={20} />
                     </div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sisa Budget (Global)</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Sisa Budget (Global)
+                    </p>
                   </div>
-                  <h3 className={`text-2xl font-bold ${sisaBudget < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  <h3
+                    className={`text-2xl font-bold ${
+                      sisaBudget < 0 ? "text-red-600" : "text-emerald-600"
+                    }`}
+                  >
                     {formatRupiah(sisaBudget)}
                   </h3>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group">
-                   <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                      <Wallet size={20}/>
+                      <Wallet size={20} />
                     </div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Budget (Global)</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Budget (Global)
+                    </p>
                   </div>
                   <div className="flex justify-between items-end">
-                    <h3 className="text-2xl font-bold text-slate-800">{formatRupiah(initialBudget)}</h3>
-                    <button onClick={openBudgetModal} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-indigo-600 cursor-pointer">
-                      <Edit3 size={18}/>
+                    <h3 className="text-2xl font-bold text-slate-800">
+                      {formatRupiah(initialBudget)}
+                    </h3>
+                    <button
+                      onClick={openBudgetModal}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-indigo-600 cursor-pointer"
+                    >
+                      <Edit3 size={18} />
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* TABEL DATA */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                   <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                    {activeTab === 'expenses' ? '📋 Daftar Pengeluaran' : '📋 Daftar Lembur Karyawan'}
-                    <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full ml-2">{selectedMonth}</span>
+                    {activeTab === "expenses"
+                      ? "📋 Daftar Pengeluaran"
+                      : "📋 Daftar Lembur Karyawan"}
+                    <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full ml-2">
+                      {selectedMonth}
+                    </span>
                   </h2>
-                  
+
                   <div className="flex gap-3 w-full md:w-auto">
                     <div className="relative flex-1 md:w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
-                        type="text" 
-                        placeholder="Cari data..." 
+                      <Search
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        size={18}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Cari data..."
                         className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition-all"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
-                    
-                    <button 
-                      onClick={() => setIsModalOpen(true)} 
+
+                    <button
+                      onClick={() => setIsModalOpen(true)}
                       className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-slate-800 transition-all shadow-md hover:shadow-slate-200 whitespace-nowrap cursor-pointer"
                     >
                       <Plus size={18} /> Tambah
@@ -531,101 +790,172 @@ export default function DashboardClient({
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50/50 text-slate-500 uppercase text-xs font-bold tracking-wider">
                       <tr>
-                        <th className="px-6 py-4 border-b border-slate-100">Date</th>
-                        <th className="px-6 py-4 border-b border-slate-100">{activeTab === 'expenses' ? 'Item Desc' : 'Nama Karyawan'}</th>
-                        
-                        {activeTab === 'expenses' && <th className="px-6 py-4 border-b border-slate-100">Order By</th>}
-                        
-                        {activeTab === 'overtime' && (
+                        <th className="px-6 py-4 border-b border-slate-100">
+                          Date
+                        </th>
+                        <th className="px-6 py-4 border-b border-slate-100">
+                          {activeTab === "expenses"
+                            ? "Item Desc"
+                            : "Nama Karyawan"}
+                        </th>
+
+                        {activeTab === "expenses" && (
+                          <th className="px-6 py-4 border-b border-slate-100">
+                            Order By
+                          </th>
+                        )}
+
+                        {activeTab === "overtime" && (
                           <>
-                            <th className="px-6 py-4 border-b border-slate-100">Hari</th>
-                            <th className="px-6 py-4 border-b border-slate-100">Rate/Hari</th>
+                            <th className="px-6 py-4 border-b border-slate-100">
+                              Hari
+                            </th>
+                            <th className="px-6 py-4 border-b border-slate-100">
+                              Rate/Hari
+                            </th>
                           </>
                         )}
 
-                        <th className="px-6 py-4 border-b border-slate-100">{activeTab === 'expenses' ? 'Amount' : 'Total'}</th>
-                        <th className="px-6 py-4 border-b border-slate-100">Status</th>
-                        <th className="px-6 py-4 border-b border-slate-100">Note</th>
-                        <th className="px-6 py-4 border-b border-slate-100 text-center">Aksi</th>
+                        <th className="px-6 py-4 border-b border-slate-100">
+                          {activeTab === "expenses" ? "Amount" : "Total"}
+                        </th>
+                        <th className="px-6 py-4 border-b border-slate-100">
+                          Status
+                        </th>
+                        <th className="px-6 py-4 border-b border-slate-100">
+                          Note
+                        </th>
+                        <th className="px-6 py-4 border-b border-slate-100 text-center">
+                          Aksi
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {activeTab === 'expenses' ? (
-                        filteredExpenses.map((item) => (
-                          <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                            <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">{item.date}</td>
-                            <td className="px-6 py-4 font-medium text-slate-800">{item.description}</td>
-                            <td className="px-6 py-4 text-slate-600">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold border border-slate-200">
-                                  {item.requester.charAt(0)}
+                      {activeTab === "expenses"
+                        ? filteredExpenses.map((item) => (
+                            <tr
+                              key={item.id}
+                              className="hover:bg-slate-50/80 transition-colors group"
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
+                                {item.date}
+                              </td>
+                              <td className="px-6 py-4 font-medium text-slate-800">
+                                {item.description}
+                              </td>
+                              <td className="px-6 py-4 text-slate-600">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold border border-slate-200">
+                                    {item.requester.charAt(0)}
+                                  </div>
+                                  {item.requester}
                                 </div>
-                                {item.requester}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 font-bold text-slate-800">{formatRupiah(item.amount)}</td>
-                            <td className="px-6 py-4">
-                              <select
-                                value={item.status}
-                                onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(item.status)}`}
-                              >
-                                <option value="Default" className="bg-white text-slate-700">Default</option>
-                                <option value="Pending" className="bg-slate-800 text-white">Pending</option>
-                                <option value="Approved" className="bg-white text-slate-700">Approved</option>
-                                <option value="Rejected" className="bg-white text-slate-700">Rejected</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">{item.note || '-'}</td>
-                            <td className="px-6 py-4 text-center">
-                              <button 
-                                onClick={() => handleDelete(item.id)} 
-                                className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                              >
-                                <Trash2 size={16}/>
-                              </button>
+                              </td>
+                              <td className="px-6 py-4 font-bold text-slate-800">
+                                {formatRupiah(item.amount)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <select
+                                  value={item.status}
+                                  onChange={(e) =>
+                                    handleStatusChange(item.id, e.target.value)
+                                  }
+                                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(
+                                    item.status
+                                  )}`}
+                                >
+                                  <option value="Default">Default</option>
+                                  <option value="Pending">Pending</option>
+                                  <option value="Approved">Approved</option>
+                                  <option value="Rejected">Rejected</option>
+                                </select>
+                              </td>
+                              <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">
+                                {item.note || "-"}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <button
+                                  onClick={() => handleDelete(item.id)}
+                                  className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        : filteredOvertimes.map((item) => (
+                            <tr
+                              key={item.id}
+                              className="hover:bg-slate-50/80 transition-colors group"
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
+                                {item.date}
+                              </td>
+                              <td className="px-6 py-4 font-medium text-slate-800">
+                                {item.employee_name}
+                              </td>
+                              <td className="px-6 py-4 text-slate-600">
+                                {item.days} Hari
+                              </td>
+                              <td className="px-6 py-4 text-slate-600">
+                                {formatRupiah(item.rate)}
+                              </td>
+                              <td className="px-6 py-4 font-bold text-slate-800">
+                                {formatRupiah(item.days * item.rate)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <select
+                                  value={item.status}
+                                  onChange={(e) =>
+                                    handleStatusChange(item.id, e.target.value)
+                                  }
+                                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(
+                                    item.status
+                                  )}`}
+                                >
+                                  <option value="Default">Default</option>
+                                  <option value="Pending">Pending</option>
+                                  <option value="Approved">Approved</option>
+                                  <option value="Rejected">Rejected</option>
+                                </select>
+                              </td>
+                              <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">
+                                {item.note || "-"}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <button
+                                  onClick={() => handleDelete(item.id)}
+                                  className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+
+                      {activeTab === "expenses" &&
+                        filteredExpenses.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="p-12 text-center text-slate-400 italic"
+                            >
+                              Belum ada data pengeluaran di bulan{" "}
+                              {selectedMonth}.
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        filteredOvertimes.map((item) => (
-                          <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                            <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">{item.date}</td>
-                            <td className="px-6 py-4 font-medium text-slate-800">{item.employee_name}</td>
-                            <td className="px-6 py-4 text-slate-600">{item.days} Hari</td>
-                            <td className="px-6 py-4 text-slate-600">{formatRupiah(item.rate)}</td>
-                            <td className="px-6 py-4 font-bold text-slate-800">{formatRupiah(item.days * item.rate)}</td>
-                            <td className="px-6 py-4">
-                              <select
-                                value={item.status}
-                                onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(item.status)}`}
-                              >
-                                <option value="Default" className="bg-white text-slate-700">Default</option>
-                                <option value="Pending" className="bg-slate-800 text-white">Pending</option>
-                                <option value="Approved" className="bg-white text-slate-700">Approved</option>
-                                <option value="Rejected" className="bg-white text-slate-700">Rejected</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">{item.note || '-'}</td>
-                            <td className="px-6 py-4 text-center">
-                              <button 
-                                onClick={() => handleDelete(item.id)} 
-                                className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                              >
-                                <Trash2 size={16}/>
-                              </button>
+                        )}
+                      {activeTab === "overtime" &&
+                        filteredOvertimes.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={8}
+                              className="p-12 text-center text-slate-400 italic"
+                            >
+                              Belum ada data lembur di bulan {selectedMonth}.
                             </td>
                           </tr>
-                        ))
-                      )}
-                      
-                      {activeTab === 'expenses' && filteredExpenses.length === 0 && (
-                        <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">Belum ada data pengeluaran di bulan {selectedMonth}.</td></tr>
-                      )}
-                      {activeTab === 'overtime' && filteredOvertimes.length === 0 && (
-                        <tr><td colSpan={8} className="p-12 text-center text-slate-400 italic">Belum ada data lembur di bulan {selectedMonth}.</td></tr>
-                      )}
+                        )}
                     </tbody>
                   </table>
                 </div>
@@ -639,18 +969,39 @@ export default function DashboardClient({
       {isBudgetModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-             <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+            <div className="p-5 border-b flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800">Edit Alokasi Budget</h3>
-              <button onClick={() => setIsBudgetModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <button
+                onClick={() => setIsBudgetModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
             </div>
             <form onSubmit={handleUpdateBudget} className="p-6 space-y-4">
-               <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Total Budget (Rp)</label>
-                  <input required name="budget" type="text" value={budgetInput} onChange={(e) => handleNumberChange(e, setBudgetInput)} className="w-full border border-slate-300 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xl text-slate-800" />
-                </div>
-                <button disabled={isSubmitting} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold hover:bg-slate-800 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2 transition-all cursor-pointer">
-                  {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : 'Simpan Perubahan'}
-                </button>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                  Total Budget (Rp)
+                </label>
+                <input
+                  required
+                  name="budget"
+                  type="text"
+                  value={budgetInput}
+                  onChange={(e) => handleNumberChange(e, setBudgetInput)}
+                  className="w-full border border-slate-300 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xl text-slate-800"
+                />
+              </div>
+              <button
+                disabled={isSubmitting}
+                className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold hover:bg-slate-800 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2 transition-all cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  "Simpan Perubahan"
+                )}
+              </button>
             </form>
           </div>
         </div>
@@ -662,56 +1013,126 @@ export default function DashboardClient({
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
             <div className="p-5 border-b flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 text-lg">
-                {activeTab === 'expenses' ? 'Tambah Pengeluaran' : 'Catat Lembur'}
+                {activeTab === "expenses"
+                  ? "Tambah Pengeluaran"
+                  : "Catat Lembur"}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Tanggal</label>
-                <input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                  Tanggal
+                </label>
+                <input
+                  required
+                  name="date"
+                  type="date"
+                  defaultValue={new Date().toISOString().split("T")[0]}
+                  className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
               </div>
 
-              {activeTab === 'expenses' && (
+              {activeTab === "expenses" && (
                 <>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nominal (Rp)</label>
-                    <input required name="amount" type="text" placeholder="0" value={amountInput} onChange={(e) => handleNumberChange(e, setAmountInput)} className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-lg" />
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                      Nominal (Rp)
+                    </label>
+                    <input
+                      required
+                      name="amount"
+                      type="text"
+                      placeholder="0"
+                      value={amountInput}
+                      onChange={(e) => handleNumberChange(e, setAmountInput)}
+                      className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-lg"
+                    />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Item Description</label>
-                    <input required name="description" type="text" className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                      Item Description
+                    </label>
+                    <input
+                      required
+                      name="description"
+                      type="text"
+                      className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Order By</label>
-                    <input required name="requester" type="text" className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                      Order By
+                    </label>
+                    <input
+                      required
+                      name="requester"
+                      type="text"
+                      className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
                   </div>
                 </>
               )}
 
-              {activeTab === 'overtime' && (
+              {activeTab === "overtime" && (
                 <>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nama Karyawan</label>
-                    <input required name="employee_name" type="text" className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                      Nama Karyawan
+                    </label>
+                    <input
+                      required
+                      name="employee_name"
+                      type="text"
+                      className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Jumlah Hari</label>
-                      <input required name="days" type="number" placeholder="0" className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                        Jumlah Hari
+                      </label>
+                      <input
+                        required
+                        name="days"
+                        type="number"
+                        placeholder="0"
+                        className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Rate / Hari (Rp)</label>
-                      <input required name="rate" type="text" placeholder="0" value={amountInput} onChange={(e) => handleNumberChange(e, setAmountInput)} className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-semibold" />
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                        Rate / Hari (Rp)
+                      </label>
+                      <input
+                        required
+                        name="rate"
+                        type="text"
+                        placeholder="0"
+                        value={amountInput}
+                        onChange={(e) => handleNumberChange(e, setAmountInput)}
+                        className="w-full border border-slate-300 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-semibold"
+                      />
                     </div>
                   </div>
                 </>
               )}
 
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Status</label>
-                <select name="status" defaultValue="Default" className="w-full border border-slate-300 p-2.5 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                  Status
+                </label>
+                <select
+                  name="status"
+                  defaultValue="Default"
+                  className="w-full border border-slate-300 p-2.5 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
                   <option value="Default">Default (Abu-abu)</option>
                   <option value="Pending">Pending (Hitam)</option>
                   <option value="Approved">Approved (Hijau)</option>
@@ -719,17 +1140,30 @@ export default function DashboardClient({
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Note</label>
-                <textarea name="note" rows={2} className="w-full border border-slate-300 p-2.5 rounded-xl resize-none focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                  Note
+                </label>
+                <textarea
+                  name="note"
+                  rows={2}
+                  className="w-full border border-slate-300 p-2.5 rounded-xl resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
+                ></textarea>
               </div>
 
-              <button disabled={isSubmitting} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold hover:bg-slate-800 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2 transition-all cursor-pointer">
-                {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : 'Simpan Data'}
+              <button
+                disabled={isSubmitting}
+                className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold hover:bg-slate-800 disabled:bg-slate-300 flex justify-center items-center gap-2 mt-2 transition-all cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  "Simpan Data"
+                )}
               </button>
             </form>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }
