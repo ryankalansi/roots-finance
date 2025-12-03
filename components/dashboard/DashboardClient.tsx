@@ -1,7 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-// FIX 1: Hapus 'LayoutDashboard' dari import karena tidak dipakai
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react"; // 1. Tambahkan useRef
 import {
   Wallet,
   Plus,
@@ -16,6 +21,8 @@ import {
   FileSpreadsheet,
   Hourglass,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 import {
@@ -48,9 +55,10 @@ import {
 // IMPORT XLSX
 import * as XLSX from "xlsx";
 
-// FIX 2: Import Image dari Next.js untuk ganti tag <img>
+// IMPORT IMAGE
 import Image from "next/image";
 
+// --- DEFINISI TIPE DATA ---
 type Expense = {
   id: string;
   date: string;
@@ -71,6 +79,15 @@ type Overtime = {
   note: string;
 };
 
+// Type Guard
+function isExpense(item: Expense | Overtime): item is Expense {
+  return (item as Expense).description !== undefined;
+}
+
+// KONSTANTA
+const ITEMS_PER_PAGE = 20;
+const AUTO_LOGOUT_TIME = 15 * 60 * 1000;
+
 // --- KOMPONEN TOOLTIP ---
 interface CustomTooltipProps {
   active?: boolean;
@@ -78,6 +95,7 @@ interface CustomTooltipProps {
     name: string;
     value: number;
     color: string;
+    [key: string]: unknown;
   }[];
   label?: string;
 }
@@ -120,18 +138,59 @@ export default function DashboardClient({
   const [budgetInput, setBudgetInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
+  // PAGINATION STATE
+  const [currentPage, setCurrentPage] = useState(1);
+
   // STATE BARU: PILIH BULAN (ARCHIVE & CURRENT)
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
 
   const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setIsMounted(true), 0);
-    return () => clearTimeout(timer);
+
+  // 2. SOLUSI FIX: Gunakan useRef untuk menyimpan ID Timer
+  // ReturnType<typeof setTimeout> akan otomatis menyesuaikan tipe (NodeJS.Timeout atau number)
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- 1. LOGIKA AUTO LOGOUT (15 MENIT) ---
+  const handleActivity = useCallback(() => {
+    // Bersihkan timer lama jika ada (menggunakan Ref, bukan window)
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+    }
+
+    // Set timer baru ke Ref
+    logoutTimerRef.current = setTimeout(() => {
+      logout();
+    }, AUTO_LOGOUT_TIME);
   }, []);
 
-  // --- FILTERING & DATA ---
+  useEffect(() => {
+    const timer = setTimeout(() => setIsMounted(true), 0);
+
+    window.addEventListener("mousemove", handleActivity);
+    window.addEventListener("keypress", handleActivity);
+    window.addEventListener("click", handleActivity);
+    window.addEventListener("scroll", handleActivity);
+
+    handleActivity();
+
+    return () => {
+      clearTimeout(timer);
+
+      // Cleanup: Hapus timer logout saat unmount
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+      }
+
+      window.removeEventListener("mousemove", handleActivity);
+      window.removeEventListener("keypress", handleActivity);
+      window.removeEventListener("click", handleActivity);
+      window.removeEventListener("scroll", handleActivity);
+    };
+  }, [handleActivity]);
+
+  // --- 2. FILTER & DATA PROCESSING ---
   const currentMonthExpenses = useMemo(() => {
     return expenses.filter((item) => item.date.startsWith(selectedMonth));
   }, [expenses, selectedMonth]);
@@ -140,16 +199,38 @@ export default function DashboardClient({
     return overtimes.filter((item) => item.date.startsWith(selectedMonth));
   }, [overtimes, selectedMonth]);
 
-  const filteredExpenses = currentMonthExpenses.filter(
-    (item) =>
-      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.requester.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredExpenses = useMemo(() => {
+    return currentMonthExpenses.filter(
+      (item) =>
+        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.requester.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [currentMonthExpenses, searchTerm]);
 
-  const filteredOvertimes = currentMonthOvertimes.filter((item) =>
-    item.employee_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOvertimes = useMemo(() => {
+    return currentMonthOvertimes.filter((item) =>
+      item.employee_name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [currentMonthOvertimes, searchTerm]);
 
+  // FIX: Reset page ke 1 jika search berubah atau tab berubah
+  useEffect(() => {
+    const timer = setTimeout(() => setCurrentPage(1), 0);
+    return () => clearTimeout(timer);
+  }, [searchTerm, activeTab, selectedMonth]);
+
+  // --- 3. LOGIKA PAGINATION ---
+  const currentDataList =
+    activeTab === "expenses" ? filteredExpenses : filteredOvertimes;
+  const totalPages = Math.ceil(currentDataList.length / ITEMS_PER_PAGE);
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return currentDataList.slice(start, end);
+  }, [currentDataList, currentPage]);
+
+  // --- 4. CHART DATA ---
   const chartData = useMemo(() => {
     const daysInMonth = new Date(
       parseInt(selectedMonth.split("-")[0]),
@@ -181,7 +262,7 @@ export default function DashboardClient({
     return data;
   }, [currentMonthExpenses, currentMonthOvertimes, selectedMonth]);
 
-  // --- KALKULASI STATISTIK ---
+  // --- 5. KALKULASI STATISTIK ---
   const totalExpenseAmount = currentMonthExpenses
     .filter((item) => item.status !== "Rejected")
     .reduce((acc, curr) => acc + curr.amount, 0);
@@ -339,7 +420,6 @@ export default function DashboardClient({
       >
         <div className="h-20 flex items-center justify-center border-b border-slate-100 p-4">
           {isSidebarOpen ? (
-            // FIX 2: Gunakan komponen Image dari Next.js
             <Image
               src="/logo.png"
               alt="Roots Lab"
@@ -388,7 +468,6 @@ export default function DashboardClient({
           </button>
         </nav>
 
-        {/* Footer Sidebar */}
         <div className="p-4 border-t border-slate-100">
           <div
             className={`flex items-center gap-3 ${
@@ -458,6 +537,7 @@ export default function DashboardClient({
         <div className="flex-1 overflow-y-auto p-8">
           {activeTab === "stats" ? (
             <div className="space-y-6 max-w-6xl mx-auto">
+              {/* ... (Chart Code) ... */}
               <div className="flex justify-center mb-8">
                 <div className="bg-white p-1.5 rounded-full border border-slate-200 shadow-sm inline-flex">
                   <button
@@ -668,6 +748,7 @@ export default function DashboardClient({
             </div>
           ) : (
             <div className="max-w-7xl mx-auto space-y-6">
+              {/* STATS CARDS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3 mb-3">
@@ -716,7 +797,7 @@ export default function DashboardClient({
                       <BarChart3 size={20} />
                     </div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      Sisa Budget (Global)
+                      Sisa Budget
                     </p>
                   </div>
                   <h3
@@ -734,7 +815,7 @@ export default function DashboardClient({
                       <Wallet size={20} />
                     </div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      Budget (Global)
+                      Pagu Budget
                     </p>
                   </div>
                   <div className="flex justify-between items-end">
@@ -751,6 +832,7 @@ export default function DashboardClient({
                 </div>
               </div>
 
+              {/* TABEL DATA */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                   <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
@@ -831,15 +913,17 @@ export default function DashboardClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {activeTab === "expenses"
-                        ? filteredExpenses.map((item) => (
-                            <tr
-                              key={item.id}
-                              className="hover:bg-slate-50/80 transition-colors group"
-                            >
-                              <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
-                                {item.date}
-                              </td>
+                      {/* PAGINATION LOGIC HERE */}
+                      {paginatedData.map((item: Expense | Overtime) => (
+                        <tr
+                          key={item.id}
+                          className="hover:bg-slate-50/80 transition-colors group"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
+                            {item.date}
+                          </td>
+                          {isExpense(item) ? (
+                            <>
                               <td className="px-6 py-4 font-medium text-slate-800">
                                 {item.description}
                               </td>
@@ -854,43 +938,9 @@ export default function DashboardClient({
                               <td className="px-6 py-4 font-bold text-slate-800">
                                 {formatRupiah(item.amount)}
                               </td>
-                              <td className="px-6 py-4">
-                                <select
-                                  value={item.status}
-                                  onChange={(e) =>
-                                    handleStatusChange(item.id, e.target.value)
-                                  }
-                                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(
-                                    item.status
-                                  )}`}
-                                >
-                                  <option value="Default">Default</option>
-                                  <option value="Pending">Pending</option>
-                                  <option value="Approved">Approved</option>
-                                  <option value="Rejected">Rejected</option>
-                                </select>
-                              </td>
-                              <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">
-                                {item.note || "-"}
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <button
-                                  onClick={() => handleDelete(item.id)}
-                                  className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        : filteredOvertimes.map((item) => (
-                            <tr
-                              key={item.id}
-                              className="hover:bg-slate-50/80 transition-colors group"
-                            >
-                              <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
-                                {item.date}
-                              </td>
+                            </>
+                          ) : (
+                            <>
                               <td className="px-6 py-4 font-medium text-slate-800">
                                 {item.employee_name}
                               </td>
@@ -903,35 +953,38 @@ export default function DashboardClient({
                               <td className="px-6 py-4 font-bold text-slate-800">
                                 {formatRupiah(item.days * item.rate)}
                               </td>
-                              <td className="px-6 py-4">
-                                <select
-                                  value={item.status}
-                                  onChange={(e) =>
-                                    handleStatusChange(item.id, e.target.value)
-                                  }
-                                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(
-                                    item.status
-                                  )}`}
-                                >
-                                  <option value="Default">Default</option>
-                                  <option value="Pending">Pending</option>
-                                  <option value="Approved">Approved</option>
-                                  <option value="Rejected">Rejected</option>
-                                </select>
-                              </td>
-                              <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">
-                                {item.note || "-"}
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <button
-                                  onClick={() => handleDelete(item.id)}
-                                  className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                            </>
+                          )}
+
+                          <td className="px-6 py-4">
+                            <select
+                              value={item.status}
+                              onChange={(e) =>
+                                handleStatusChange(item.id, e.target.value)
+                              }
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase border cursor-pointer outline-none appearance-none hover:brightness-95 transition-all ${getStatusColor(
+                                item.status
+                              )}`}
+                            >
+                              <option value="Default">Default</option>
+                              <option value="Pending">Pending</option>
+                              <option value="Approved">Approved</option>
+                              <option value="Rejected">Rejected</option>
+                            </select>
+                          </td>
+                          <td className="px-6 py-4 text-slate-400 text-xs max-w-[150px] truncate">
+                            {item.note || "-"}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
 
                       {activeTab === "expenses" &&
                         filteredExpenses.length === 0 && (
@@ -959,13 +1012,53 @@ export default function DashboardClient({
                     </tbody>
                   </table>
                 </div>
+
+                {/* PAGINATION CONTROLS */}
+                {totalPages > 1 && (
+                  <div className="p-4 border-t border-slate-100 flex justify-between items-center bg-white">
+                    <div className="text-sm text-slate-500">
+                      Menampilkan{" "}
+                      <span className="font-bold">{paginatedData.length}</span>{" "}
+                      dari{" "}
+                      <span className="font-bold">
+                        {currentDataList.length}
+                      </span>{" "}
+                      data
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() =>
+                          setCurrentPage((prev) => Math.max(prev - 1, 1))
+                        }
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-50 rounded-lg border border-slate-200">
+                        Halaman {currentPage} / {totalPages}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setCurrentPage((prev) =>
+                            Math.min(prev + 1, totalPages)
+                          )
+                        }
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* MODAL EDIT BUDGET */}
+      {/* MODAL EDIT BUDGET & ADD EXPENSE (Sama seperti sebelumnya) */}
       {isBudgetModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
@@ -1007,7 +1100,6 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* MODAL TAMBAH DATA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
