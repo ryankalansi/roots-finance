@@ -755,7 +755,7 @@ export default function DashboardClient({
                               <td className="px-6 py-4 text-center">
                                 <button
                                   onClick={() => handleDelete(item.id)}
-                                  className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg"
+                                  className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg cursor-pointer"
                                 >
                                   <Trash2 size={16} />
                                 </button>
