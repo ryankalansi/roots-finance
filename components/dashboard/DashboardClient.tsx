@@ -797,7 +797,7 @@ export default function DashboardClient({
                       <BarChart3 size={20} />
                     </div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      Sisa Budget
+                      Sisa Budget (Global)
                     </p>
                   </div>
                   <h3
@@ -815,7 +815,7 @@ export default function DashboardClient({
                       <Wallet size={20} />
                     </div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      Pagu Budget
+                      Budget (Global)
                     </p>
                   </div>
                   <div className="flex justify-between items-end">
