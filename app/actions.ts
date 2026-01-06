@@ -86,6 +86,31 @@ export async function addExpense(formData: FormData) {
   return { success: true };
 }
 
+// [BARU] FUNGSI UPDATE EXPENSE
+export async function updateExpense(formData: FormData) {
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const rawData = {
+    date: formData.get("date"),
+    description: formData.get("description"),
+    requester: formData.get("requester"),
+    amount: Number(formData.get("amount")?.toString().replace(/\D/g, "")),
+    status: formData.get("status"),
+    note: formData.get("note"),
+  };
+
+  const { error } = await supabase
+    .from("expenses")
+    .update(rawData)
+    .eq("id", id);
+
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath("/");
+  return { success: true };
+}
+
 export async function deleteExpense(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -120,6 +145,31 @@ export async function addOvertime(formData: FormData) {
   };
 
   const { error } = await supabase.from("overtimes").insert(rawData);
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+// [BARU] FUNGSI UPDATE OVERTIME
+export async function updateOvertime(formData: FormData) {
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const rawData = {
+    date: formData.get("date"),
+    employee_name: formData.get("employee_name"),
+    days: Number(formData.get("days")),
+    rate: Number(formData.get("rate")?.toString().replace(/\D/g, "")),
+    status: formData.get("status"),
+    note: formData.get("note"),
+  };
+
+  const { error } = await supabase
+    .from("overtimes")
+    .update(rawData)
+    .eq("id", id);
+
   if (error) return { success: false, message: error.message };
 
   revalidatePath("/");

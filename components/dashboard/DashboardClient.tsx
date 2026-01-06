@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useCallback,
   useRef,
-} from "react"; // 1. Tambahkan useRef
+} from "react";
 import {
   Wallet,
   Plus,
@@ -23,6 +23,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Pencil, // Icon Edit baru
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 import {
@@ -34,6 +35,8 @@ import {
   updateOvertimeStatus,
   updateBudget,
   logout,
+  updateExpense, // Pastikan ada di actions.ts
+  updateOvertime, // Pastikan ada di actions.ts
 } from "@/app/actions";
 
 // IMPORT RECHARTS
@@ -79,12 +82,10 @@ type Overtime = {
   note: string;
 };
 
-// Type Guard
 function isExpense(item: Expense | Overtime): item is Expense {
   return (item as Expense).description !== undefined;
 }
 
-// KONSTANTA
 const ITEMS_PER_PAGE = 20;
 const AUTO_LOGOUT_TIME = 15 * 60 * 1000;
 
@@ -138,28 +139,24 @@ export default function DashboardClient({
   const [budgetInput, setBudgetInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // PAGINATION STATE
+  // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
-
-  // STATE BARU: PILIH BULAN (ARCHIVE & CURRENT)
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
 
-  const [isMounted, setIsMounted] = useState(false);
+  // EDIT STATE
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  // 2. SOLUSI FIX: Gunakan useRef untuk menyimpan ID Timer
-  // ReturnType<typeof setTimeout> akan otomatis menyesuaikan tipe (NodeJS.Timeout atau number)
+  const [isMounted, setIsMounted] = useState(false);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // --- 1. LOGIKA AUTO LOGOUT (15 MENIT) ---
+  // --- 1. LOGIKA AUTO LOGOUT ---
   const handleActivity = useCallback(() => {
-    // Bersihkan timer lama jika ada (menggunakan Ref, bukan window)
     if (logoutTimerRef.current) {
       clearTimeout(logoutTimerRef.current);
     }
-
-    // Set timer baru ke Ref
     logoutTimerRef.current = setTimeout(() => {
       logout();
     }, AUTO_LOGOUT_TIME);
@@ -167,22 +164,15 @@ export default function DashboardClient({
 
   useEffect(() => {
     const timer = setTimeout(() => setIsMounted(true), 0);
-
     window.addEventListener("mousemove", handleActivity);
     window.addEventListener("keypress", handleActivity);
     window.addEventListener("click", handleActivity);
     window.addEventListener("scroll", handleActivity);
-
     handleActivity();
 
     return () => {
       clearTimeout(timer);
-
-      // Cleanup: Hapus timer logout saat unmount
-      if (logoutTimerRef.current) {
-        clearTimeout(logoutTimerRef.current);
-      }
-
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
       window.removeEventListener("mousemove", handleActivity);
       window.removeEventListener("keypress", handleActivity);
       window.removeEventListener("click", handleActivity);
@@ -213,13 +203,11 @@ export default function DashboardClient({
     );
   }, [currentMonthOvertimes, searchTerm]);
 
-  // FIX: Reset page ke 1 jika search berubah atau tab berubah
   useEffect(() => {
     const timer = setTimeout(() => setCurrentPage(1), 0);
     return () => clearTimeout(timer);
   }, [searchTerm, activeTab, selectedMonth]);
 
-  // --- 3. LOGIKA PAGINATION ---
   const currentDataList =
     activeTab === "expenses" ? filteredExpenses : filteredOvertimes;
   const totalPages = Math.ceil(currentDataList.length / ITEMS_PER_PAGE);
@@ -292,17 +280,81 @@ export default function DashboardClient({
     );
   };
 
+  const handleEditClick = (item: Expense | Overtime) => {
+    setEditingId(item.id);
+    if (isExpense(item)) {
+      setAmountInput(new Intl.NumberFormat("id-ID").format(item.amount));
+    } else {
+      setAmountInput(new Intl.NumberFormat("id-ID").format(item.rate));
+    }
+
+    setIsModalOpen(true);
+
+    setTimeout(() => {
+      if (formRef.current) {
+        const dateInput = formRef.current.elements.namedItem(
+          "date"
+        ) as HTMLInputElement;
+        if (dateInput) dateInput.value = item.date;
+
+        const noteInput = formRef.current.elements.namedItem(
+          "note"
+        ) as HTMLTextAreaElement;
+        if (noteInput) noteInput.value = item.note || "";
+
+        const statusInput = formRef.current.elements.namedItem(
+          "status"
+        ) as HTMLSelectElement;
+        if (statusInput) statusInput.value = item.status || "Default";
+
+        if (activeTab === "expenses" && isExpense(item)) {
+          const descInput = formRef.current.elements.namedItem(
+            "description"
+          ) as HTMLInputElement;
+          if (descInput) descInput.value = item.description;
+
+          const reqInput = formRef.current.elements.namedItem(
+            "requester"
+          ) as HTMLInputElement;
+          if (reqInput) reqInput.value = item.requester;
+        } else if (activeTab === "overtime" && !isExpense(item)) {
+          const empInput = formRef.current.elements.namedItem(
+            "employee_name"
+          ) as HTMLInputElement;
+          if (empInput) empInput.value = item.employee_name;
+
+          const daysInput = formRef.current.elements.namedItem(
+            "days"
+          ) as HTMLInputElement;
+          if (daysInput) daysInput.value = item.days.toString();
+        }
+      }
+    }, 100);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
 
-    if (activeTab === "expenses") await addExpense(formData);
-    else await addOvertime(formData);
-
-    setIsSubmitting(false);
-    setIsModalOpen(false);
-    setAmountInput("");
+    try {
+      if (editingId) {
+        formData.append("id", editingId);
+        if (activeTab === "expenses") await updateExpense(formData);
+        else await updateOvertime(formData);
+      } else {
+        if (activeTab === "expenses") await addExpense(formData);
+        else await addOvertime(formData);
+      }
+    } catch (error) {
+      console.error("Error submitting form", error);
+      alert("Terjadi kesalahan saat menyimpan data.");
+    } finally {
+      setIsSubmitting(false);
+      setIsModalOpen(false);
+      setEditingId(null);
+      setAmountInput("");
+    }
   };
 
   const handleUpdateBudget = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -333,65 +385,107 @@ export default function DashboardClient({
     setIsBudgetModalOpen(true);
   };
 
+  // --- EXPORT EXCEL ---
   const handleExportExcel = () => {
     const wb = XLSX.utils.book_new();
-    const summaryRows = [
-      ["LAPORAN KEUANGAN BULANAN", ""],
-      ["Periode", selectedMonth],
-      ["", ""],
-      ["KETERANGAN", "NOMINAL (Rp)"],
-      ["Total Alokasi Budget", initialBudget],
-      ["Total Pengeluaran Operasional", totalExpenseAmount],
-      ["Total Biaya Lembur", totalOvertimeAmount],
-      ["Total Terpakai (All)", grandTotalUsed],
-      ["Sisa Budget Akhir", sisaBudget],
-      ["", ""],
-      ["Tanggal Download", new Date().toLocaleString()],
-    ];
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
-    wsSummary["!cols"] = [{ wch: 35 }, { wch: 25 }];
 
-    const expenseData = currentMonthExpenses.map((item) => ({
-      "Tanggal": item.date,
-      "Deskripsi Item": item.description,
-      "Pemohon": item.requester,
-      "Nominal (Rp)": item.amount,
-      "Status": item.status,
-      "Catatan": item.note || "-",
-    }));
-    const wsExpense = XLSX.utils.json_to_sheet(expenseData);
-    wsExpense["!cols"] = [
+    const reportTitle = [
+      ["LAPORAN KEUANGAN & OPERASIONAL - ROOTSLAB"],
+      [`PERIODE: ${selectedMonth}`],
+      [""],
+    ];
+
+    const summaryData = [
+      ["RINGKASAN BUDGET", "", "", ""],
+      ["Kategori", "Nilai (Rp)", "Status", "Keterangan"],
+      ["Total Alokasi Budget", initialBudget, "Active", "Modal Awal"],
+      ["Total Pengeluaran", totalExpenseAmount, "Used", "Operasional Kantor"],
+      ["Total Lembur", totalOvertimeAmount, "Used", "SDM / Karyawan"],
+      ["Total Terpakai (All)", grandTotalUsed, "", ""],
+      [
+        "SISA BUDGET AKHIR",
+        sisaBudget,
+        sisaBudget < 0 ? "OVERBUDGET" : "SAFE",
+        "Saldo Akhir",
+      ],
+      ["", "", "", ""],
+    ];
+
+    const expenseHeader = [
+      ["RINCIAN PENGELUARAN (EXPENSES)"],
+      [
+        "Tanggal",
+        "Item Deskripsi",
+        "Order By (Pemohon)",
+        "Nominal (Rp)",
+        "Status",
+        "Catatan",
+      ],
+    ];
+
+    const expenseRows = currentMonthExpenses.map((item) => [
+      item.date,
+      item.description,
+      item.requester,
+      item.amount,
+      item.status,
+      item.note || "-",
+    ]);
+
+    const overtimeHeader = [
+      ["", "", "", "", "", ""],
+      ["RINCIAN LEMBUR (OVERTIME)"],
+      [
+        "Tanggal",
+        "Nama Karyawan",
+        "Jumlah Hari",
+        "Rate/Hari (Rp)",
+        "Total (Rp)",
+        "Status",
+        "Catatan",
+      ],
+    ];
+
+    const overtimeRows = currentMonthOvertimes.map((item) => [
+      item.date,
+      item.employee_name,
+      item.days,
+      item.rate,
+      item.days * item.rate,
+      item.status,
+      item.note || "-",
+    ]);
+
+    const finalData = [
+      ...reportTitle,
+      ...summaryData,
+      ...expenseHeader,
+      ...expenseRows,
+      ...overtimeHeader,
+      ...overtimeRows,
+      [""],
+      ["Generated by RootsFinance System", new Date().toLocaleString()],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+    ws["!cols"] = [
       { wch: 15 },
-      { wch: 30 },
+      { wch: 35 },
+      { wch: 25 },
       { wch: 20 },
-      { wch: 15 },
-      { wch: 15 },
+      { wch: 20 },
       { wch: 30 },
+      { wch: 15 },
     ];
 
-    const overtimeData = currentMonthOvertimes.map((item) => ({
-      "Tanggal": item.date,
-      "Nama Karyawan": item.employee_name,
-      "Jumlah Hari": item.days,
-      "Rate Harian (Rp)": item.rate,
-      "Total (Rp)": item.days * item.rate,
-      "Status": item.status,
-      "Catatan": item.note || "-",
-    }));
-    const wsOvertime = XLSX.utils.json_to_sheet(overtimeData);
-    wsOvertime["!cols"] = [
-      { wch: 15 },
-      { wch: 30 },
-      { wch: 10 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 30 },
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
     ];
 
-    XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan");
-    XLSX.utils.book_append_sheet(wb, wsExpense, "Pengeluaran");
-    XLSX.utils.book_append_sheet(wb, wsOvertime, "Lembur");
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan Lengkap");
     XLSX.writeFile(wb, `Laporan_Keuangan_Roots_${selectedMonth}.xlsx`);
   };
 
@@ -469,23 +563,11 @@ export default function DashboardClient({
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <div
-            className={`flex items-center gap-3 ${
-              !isSidebarOpen && "justify-center"
-            }`}
-          >
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
-              A
+          {isSidebarOpen && (
+            <div className="overflow-hidden text-center">
+              <p className="text-xs text-slate-400">v1.2.0 Stable</p>
             </div>
-            {isSidebarOpen && (
-              <div className="overflow-hidden">
-                <p className="text-sm font-bold text-slate-700 truncate">
-                  Admin Kantor
-                </p>
-                <p className="text-xs text-slate-400 truncate">Keuangan</p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </aside>
 
@@ -537,7 +619,7 @@ export default function DashboardClient({
         <div className="flex-1 overflow-y-auto p-8">
           {activeTab === "stats" ? (
             <div className="space-y-6 max-w-6xl mx-auto">
-              {/* ... (Chart Code) ... */}
+              {/* CHARTS SECTION */}
               <div className="flex justify-center mb-8">
                 <div className="bg-white p-1.5 rounded-full border border-slate-200 shadow-sm inline-flex">
                   <button
@@ -860,7 +942,11 @@ export default function DashboardClient({
                     </div>
 
                     <button
-                      onClick={() => setIsModalOpen(true)}
+                      onClick={() => {
+                        setEditingId(null);
+                        setAmountInput("");
+                        setIsModalOpen(true);
+                      }}
                       className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-slate-800 transition-all shadow-md hover:shadow-slate-200 whitespace-nowrap cursor-pointer"
                     >
                       <Plus size={18} /> Tambah
@@ -880,24 +966,21 @@ export default function DashboardClient({
                             ? "Item Desc"
                             : "Nama Karyawan"}
                         </th>
-
                         {activeTab === "expenses" && (
                           <th className="px-6 py-4 border-b border-slate-100">
                             Order By
                           </th>
                         )}
-
                         {activeTab === "overtime" && (
                           <>
                             <th className="px-6 py-4 border-b border-slate-100">
                               Hari
                             </th>
                             <th className="px-6 py-4 border-b border-slate-100">
-                              Rate/Hari
+                              Rate
                             </th>
                           </>
                         )}
-
                         <th className="px-6 py-4 border-b border-slate-100">
                           {activeTab === "expenses" ? "Amount" : "Total"}
                         </th>
@@ -913,7 +996,6 @@ export default function DashboardClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {/* PAGINATION LOGIC HERE */}
                       {paginatedData.map((item: Expense | Overtime) => (
                         <tr
                           key={item.id}
@@ -945,7 +1027,7 @@ export default function DashboardClient({
                                 {item.employee_name}
                               </td>
                               <td className="px-6 py-4 text-slate-600">
-                                {item.days} Hari
+                                {item.days}
                               </td>
                               <td className="px-6 py-4 text-slate-600">
                                 {formatRupiah(item.rate)}
@@ -976,44 +1058,29 @@ export default function DashboardClient({
                             {item.note || "-"}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <div className="flex justify-center items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handleEditClick(item)}
+                                className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Data"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(item.id)}
+                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus Data"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
-
-                      {activeTab === "expenses" &&
-                        filteredExpenses.length === 0 && (
-                          <tr>
-                            <td
-                              colSpan={7}
-                              className="p-12 text-center text-slate-400 italic"
-                            >
-                              Belum ada data pengeluaran di bulan{" "}
-                              {selectedMonth}.
-                            </td>
-                          </tr>
-                        )}
-                      {activeTab === "overtime" &&
-                        filteredOvertimes.length === 0 && (
-                          <tr>
-                            <td
-                              colSpan={8}
-                              className="p-12 text-center text-slate-400 italic"
-                            >
-                              Belum ada data lembur di bulan {selectedMonth}.
-                            </td>
-                          </tr>
-                        )}
                     </tbody>
                   </table>
                 </div>
 
-                {/* PAGINATION CONTROLS */}
                 {totalPages > 1 && (
                   <div className="p-4 border-t border-slate-100 flex justify-between items-center bg-white">
                     <div className="text-sm text-slate-500">
@@ -1031,12 +1098,12 @@ export default function DashboardClient({
                           setCurrentPage((prev) => Math.max(prev - 1, 1))
                         }
                         disabled={currentPage === 1}
-                        className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 border rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
                       >
                         <ChevronLeft size={16} />
                       </button>
-                      <span className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-50 rounded-lg border border-slate-200">
-                        Halaman {currentPage} / {totalPages}
+                      <span className="px-4 py-2 bg-slate-50 border rounded-lg text-sm text-slate-600">
+                        {currentPage} / {totalPages}
                       </span>
                       <button
                         onClick={() =>
@@ -1045,7 +1112,7 @@ export default function DashboardClient({
                           )
                         }
                         disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 border rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
                       >
                         <ChevronRight size={16} />
                       </button>
@@ -1058,7 +1125,7 @@ export default function DashboardClient({
         </div>
       </main>
 
-      {/* MODAL EDIT BUDGET & ADD EXPENSE (Sama seperti sebelumnya) */}
+      {/* MODAL EDIT BUDGET */}
       {isBudgetModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
@@ -1100,24 +1167,36 @@ export default function DashboardClient({
         </div>
       )}
 
+      {/* MODAL TAMBAH/EDIT DATA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
             <div className="p-5 border-b flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 text-lg">
-                {activeTab === "expenses"
-                  ? "Tambah Pengeluaran"
-                  : "Catat Lembur"}
+                {editingId
+                  ? `Edit ${
+                      activeTab === "expenses" ? "Pengeluaran" : "Lembur"
+                    }`
+                  : `Tambah ${
+                      activeTab === "expenses" ? "Pengeluaran" : "Lembur"
+                    }`}
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingId(null);
+                }}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form
+              ref={formRef}
+              onSubmit={handleSubmit}
+              className="p-6 space-y-4"
+            >
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
                   Tanggal
@@ -1248,6 +1327,8 @@ export default function DashboardClient({
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" size={20} />
+                ) : editingId ? (
+                  "Update Data"
                 ) : (
                   "Simpan Data"
                 )}
